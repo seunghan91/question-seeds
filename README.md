@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🌱 질문씨앗 (Question Seeds)
 
-## Getting Started
+한국어 질문 코칭 데모 — 질문을 입력하면 Bloom의 교육목표 분류(Bloom's Taxonomy) 기준 **Level 1~5**로 평가하고, **한 단계 더 깊은 질문**으로 가는 길을 한국어로 코칭합니다.
 
-First, run the development server:
+> An unofficial demo **inspired by [Stanford SMILE](https://newsmile.seedsofempowerment.org)** — not affiliated with Seeds of Empowerment.
+> 목적: Ask SMILE의 한국어 현지화(피드백·코칭의 한국어화)가 어떤 경험이어야 하는지 작동물로 보여주는 것. 코드·프롬프트·평가셋은 SoE 측이 원하면 기증을 전제로 공개합니다.
+
+## 구성
+
+| 모드 | 경로 | 상태 |
+|---|---|---|
+| 솔로 질문 코칭 | `/` | ✅ 작동 (mock/anthropic/openai) |
+| EN vs KO 비교 | `/compare` | 🚧 Phase 4 |
+| 워크숍 라이브 (QR 입장 + 실시간 보드) | `/host`, `/r/[code]` | 🚧 Phase 3 — `supabase/schema.sql` 준비됨 |
+
+## 실행
 
 ```bash
+npm install
+cp .env.example .env.local   # ANTHROPIC_API_KEY 설정 (없으면 LLM_PROVIDER=mock)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- `LLM_PROVIDER=mock` — API 키 없이 결정적 휴리스틱으로 데모/E2E 가능
+- `LLM_PROVIDER=anthropic` (기본) — `claude-sonnet-4-6`
+- `LLM_PROVIDER=openai` — Ask SMILE 본진(GPT)과의 분류 일치 비교용
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 평가 (한국어 레벨 분류 정확도)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+레벨 라벨링된 한국어 질문 50문항(`data/evalset.ko.json`)으로 분류 정확도를 측정합니다.
+1~25번은 Kim, Wang & Bonk (2025)의 Ask.SMILE 루브릭 예시 테이블 번안, 26~50번은 자체 작성(초중고 + 성인 직무).
 
-## Learn More
+```bash
+LLM_PROVIDER=mock npx tsx scripts/eval.ts                 # 휴리스틱 베이스라인 (74% exact)
+ANTHROPIC_API_KEY=... npx tsx scripts/eval.ts             # Claude
+LLM_PROVIDER=openai OPENAI_API_KEY=... npx tsx scripts/eval.ts  # GPT
+```
 
-To learn more about Next.js, take a look at the following resources:
+결과(혼동행렬 포함)는 `data/eval-results/`에 저장됩니다. 목표: exact ≥ 80%.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 왜 만들었나
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Ask SMILE은 한국어 질문을 이해하고 평가하지만, 피드백은 영어로만 응답합니다(2026-06 기준).
+한국 학생·교사에게는 이 지점이 실질적 진입 장벽이라, "피드백까지 한국어인 경험"을 데모로 만들었습니다.
 
-## Deploy on Vercel
+- 루브릭 출처: Kim, P., Wang, W., & Bonk, C. J. (2025). *Generative AI as a Coach to Help Students Enhance Proficiency in Question Formulation*. Journal of Educational Computing Research.
+- 시스템 프롬프트: `lib/rubric.ts` — 한국어 번안 루브릭 + 코칭 원칙 (자연스러운 한국어, 번역투 금지)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
