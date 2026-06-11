@@ -25,6 +25,8 @@ type Dict = {
   footer: string;
   historyTitle: string;
   historyClear: string;
+  navCompare: string;
+  navWorkshop: string;
 };
 
 const dictionaries: Record<"ko" | "en", Dict> = {
@@ -47,6 +49,8 @@ const dictionaries: Record<"ko" | "en", Dict> = {
       "Stanford SMILE에서 영감을 받은 비공식 데모입니다 · Seeds of Empowerment와 무관합니다",
     historyTitle: "나의 질문 성장 기록",
     historyClear: "기록 지우기",
+    navCompare: "Ask SMILE과 비교 보기 →",
+    navWorkshop: "워크숍 라이브 모드 →",
   },
   en: {
     title: "Question Seeds",
@@ -67,6 +71,8 @@ const dictionaries: Record<"ko" | "en", Dict> = {
       "An unofficial demo inspired by Stanford SMILE · Not affiliated with Seeds of Empowerment",
     historyTitle: "Your growth so far",
     historyClear: "Clear",
+    navCompare: "Compare with Ask SMILE →",
+    navWorkshop: "Workshop live mode →",
   },
 };
 

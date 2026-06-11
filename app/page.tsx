@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useLocale } from "@/lib/i18n";
 import type { Evaluation } from "@/lib/rubric";
 
@@ -241,6 +242,20 @@ export default function Home() {
             </ol>
           </section>
         )}
+        <nav className="mt-8 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/compare"
+            className="rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold text-[#5a6470] hover:bg-white"
+          >
+            {t.navCompare}
+          </Link>
+          <Link
+            href="/host"
+            className="rounded-full border border-[#d8d4ca] px-4 py-2 text-sm font-semibold text-[#5a6470] hover:bg-white"
+          >
+            {t.navWorkshop}
+          </Link>
+        </nav>
       </div>
 
       <footer className="mt-auto pt-12 pb-2 text-center text-xs text-[#9aa0a8]">

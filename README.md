@@ -1,5 +1,10 @@
 # 🌱 질문씨앗 (Question Seeds)
 
+**English** — A working Korean-localization prototype of [Ask SMILE](https://ask.smile.seedsofempowerment.org)'s question coaching: questions are rated on the Bloom-aligned Level 1–5 rubric (adapted into Korean from Kim, Wang & Bonk 2025) with rationale, coaching, and an upgraded question — all in the learner's language. Includes a QR workshop mode with SMILE-style peer star ratings, and a 50-question Korean benchmark (**92% exact / 96% ±1** with a GPT backbone). Built as a volunteer contribution, offered for donation to Seeds of Empowerment.
+**Live demo: <https://question-seeds.vercel.app>** · [EN vs KO comparison](https://question-seeds.vercel.app/compare) · [Proposal one-pager](docs/one-pager.md)
+
+---
+
 한국어 질문 코칭 데모 — 질문을 입력하면 Bloom의 교육목표 분류(Bloom's Taxonomy) 기준 **Level 1~5**로 평가하고, **한 단계 더 깊은 질문**으로 가는 길을 한국어로 코칭합니다.
 
 > An unofficial demo **inspired by [Stanford SMILE](https://newsmile.seedsofempowerment.org)** — not affiliated with Seeds of Empowerment.
