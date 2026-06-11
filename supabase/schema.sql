@@ -1,11 +1,19 @@
 -- 질문씨앗 워크숍 라이브 모드 스키마 (Phase 3)
 -- Supabase SQL Editor에서 실행
+--
+-- 보안 모델 (codex review 반영):
+--   * 모든 쓰기와 호스트 작업은 서버 라우트(service role)를 통해서만 수행한다.
+--     - 룸 생성: 서버가 생성 후 host_key를 응답으로 1회만 노출
+--     - 질문 제출: 서버가 LLM 평가 후 insert (클라이언트가 level/coaching 위조 불가)
+--     - reveal 토글: 서버가 host_key 검증 후 수행
+--   * anon 클라이언트는 "공개(revealed=true)된 제출물 읽기"만 가능 — 참가자 공개 월 + Realtime 용도.
+--   * rooms는 anon에게 일절 노출하지 않는다 (host_key 유출 방지). 코드→룸 해석도 서버 라우트가 담당.
 
 create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,            -- 6자리 입장 코드 (QR)
   title text not null default '',
-  host_key uuid not null default gen_random_uuid(),  -- 호스트 URL 토큰
+  host_key uuid not null default gen_random_uuid(),  -- 호스트 비밀 토큰 (서버 전용)
   created_at timestamptz not null default now()
 );
 
@@ -24,15 +32,14 @@ create table if not exists submissions (
 
 create index if not exists submissions_room_idx on submissions (room_id, created_at);
 
--- Realtime 발행 (호스트 보드 실시간 갱신)
+-- Realtime 발행 (공개된 제출물의 실시간 갱신 — RLS가 함께 적용됨)
 alter publication supabase_realtime add table submissions;
 
--- RLS: 데모 단계에서는 anon 읽기/쓰기 허용 (질문 텍스트 외 개인정보 없음)
 alter table rooms enable row level security;
 alter table submissions enable row level security;
 
-create policy "rooms anon read" on rooms for select using (true);
-create policy "rooms anon insert" on rooms for insert with check (true);
-create policy "submissions anon read" on submissions for select using (true);
-create policy "submissions anon insert" on submissions for insert with check (true);
--- revealed 토글은 서버 라우트(host_key 검증)를 통해서만 — service role 사용
+-- rooms: anon 정책 없음 = 접근 불가 (host_key 보호). 서버는 service role로 우회.
+
+-- submissions: anon은 "공개된 행"만 읽기 가능. 쓰기 정책 없음 = 서버 전용.
+create policy "submissions read revealed only" on submissions
+  for select using (revealed = true);

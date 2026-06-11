@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { evaluateQuestion } from "@/lib/evaluate";
+import { rateLimit, clientKey } from "@/lib/ratelimit";
 
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
+  const limit = rateLimit(clientKey(req));
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
+    );
+  }
+
   let body: { question?: string };
   try {
     body = await req.json();
