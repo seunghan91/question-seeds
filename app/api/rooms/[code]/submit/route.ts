@@ -18,7 +18,7 @@ export async function POST(
     return NextResponse.json({ error: "supabase_not_configured" }, { status: 503 });
 
   const { code } = await params;
-  let body: { nickname?: string; question?: string };
+  let body: { nickname?: string; question?: string; voter_key?: string };
   try {
     body = await req.json();
   } catch {
@@ -28,6 +28,11 @@ export async function POST(
   const nickname = (body.nickname?.trim() || "익명").slice(0, 20);
   if (!question || question.length > 500)
     return NextResponse.json({ error: "invalid_question" }, { status: 400 });
+  // voter_key: 피어 평가의 "자기 질문 평가 불가" 검증용 advisory 식별자 (uuid만 수용)
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const submitterKey =
+    body.voter_key && UUID_RE.test(body.voter_key) ? body.voter_key : null;
 
   const { data: room } = await db
     .from("rooms")
@@ -39,17 +44,23 @@ export async function POST(
 
   try {
     const ev = await evaluateQuestion(question);
-    const { error } = await db.from("submissions").insert({
-      room_id: room.id,
-      nickname,
-      question,
-      level: ev.level,
-      level_name: ev.level_name,
-      coaching: ev.coaching,
-      upgraded_question: ev.upgraded_question,
-    });
+    const { data: inserted, error } = await db
+      .from("submissions")
+      .insert({
+        room_id: room.id,
+        nickname,
+        question,
+        level: ev.level,
+        level_name: ev.level_name,
+        coaching: ev.coaching,
+        upgraded_question: ev.upgraded_question,
+        submitter_key: submitterKey,
+      })
+      .select("id")
+      .single();
     if (error) throw error;
-    return NextResponse.json(ev); // 제출자 본인에게만 보이는 개인 피드백
+    // 개인 피드백 + 본인 질문 식별용 id ("내 질문" 배지 — UI 편의용, 보안 아님)
+    return NextResponse.json({ ...ev, id: inserted.id });
   } catch (e) {
     console.error("submit failed:", e);
     return NextResponse.json({ error: "submit_failed" }, { status: 502 });

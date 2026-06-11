@@ -33,6 +33,26 @@ export async function GET(
     .eq("room_id", room.id)
     .order("created_at", { ascending: true });
 
+  // 피어 별점 집계 머지 (2차 쿼리 — 워크숍 규모에서 충분)
+  const ids = (rows ?? []).map((r) => r.id);
+  const stats = new Map<string, { avg_stars: number; rating_count: number }>();
+  if (ids.length > 0) {
+    const { data: statRows } = await db
+      .from("submission_rating_stats")
+      .select("submission_id, avg_stars, rating_count")
+      .in("submission_id", ids);
+    for (const s of statRows ?? [])
+      stats.set(s.submission_id, {
+        avg_stars: Number(s.avg_stars),
+        rating_count: s.rating_count,
+      });
+  }
+  const enriched = (rows ?? []).map((r) => ({
+    ...r,
+    avg_stars: stats.get(r.id)?.avg_stars ?? null,
+    rating_count: stats.get(r.id)?.rating_count ?? 0,
+  }));
+
   if (req.nextUrl.searchParams.get("format") === "csv") {
     // 셀 앞에 ' 를 붙여 스프레드시트 수식 주입(=,+,-,@) 차단
     const esc = (s: string) => {
@@ -41,9 +61,16 @@ export async function GET(
       return `"${v.replace(/"/g, '""')}"`;
     };
     const csv = [
-      "created_at,nickname,level,question",
-      ...(rows ?? []).map((r) =>
-        [r.created_at, esc(r.nickname), r.level, esc(r.question)].join(",")
+      "created_at,nickname,level,question,avg_stars,rating_count",
+      ...enriched.map((r) =>
+        [
+          r.created_at,
+          esc(r.nickname),
+          r.level,
+          esc(r.question),
+          r.avg_stars ?? "",
+          r.rating_count,
+        ].join(",")
       ),
     ].join("\n");
     return new NextResponse("﻿" + csv, {
@@ -54,7 +81,7 @@ export async function GET(
     });
   }
 
-  return NextResponse.json({ title: room.title, submissions: rows ?? [] });
+  return NextResponse.json({ title: room.title, submissions: enriched });
 }
 
 // PATCH /api/rooms/[code]/board — reveal 토글 { host_key, submission_id, revealed }

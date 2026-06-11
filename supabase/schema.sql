@@ -50,3 +50,33 @@ create policy "submissions read revealed only" on submissions
 revoke select on submissions from anon, authenticated;
 grant select (id, nickname, question, level, level_name, revealed, created_at)
   on submissions to anon, authenticated;
+
+-- ── 피어 별점 (SMILE 스타일) ─────────────────────────────────────────
+-- submitter_key: 제출자 식별용 (서버 전용). 위 grant 화이트리스트에 절대
+-- 추가하지 않는다 — coaching과 동급 비공개. "자기 질문 평가 불가" 검증에 사용.
+alter table submissions add column if not exists submitter_key uuid;
+
+-- voter_key는 클라이언트 localStorage uuid — advisory 식별자다.
+-- localStorage를 지우면 새 식별자를 만들 수 있으므로 암호학적 차단이 아니라
+-- 데모 단계의 1차 가드: DB unique + 서버 자기평가 검증 + IP 레이트리밋 조합.
+create table if not exists ratings (
+  id uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references submissions(id) on delete cascade,
+  voter_key uuid not null,
+  stars int not null check (stars between 1 and 5),
+  created_at timestamptz not null default now(),
+  unique (submission_id, voter_key)
+);
+create index if not exists ratings_submission_idx on ratings (submission_id);
+alter table ratings enable row level security;  -- 정책 없음 = anon 접근 불가
+revoke all on ratings from anon, authenticated;
+
+-- 집계 뷰 (service role 전용). definer-rights 뷰는 RLS를 우회하므로
+-- 아래 revoke는 선택이 아니라 필수다.
+create or replace view submission_rating_stats as
+  select submission_id,
+         count(*)::int as rating_count,
+         round(avg(stars)::numeric, 2) as avg_stars
+  from ratings
+  group by submission_id;
+revoke all on submission_rating_stats from anon, authenticated;
