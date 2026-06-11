@@ -43,3 +43,9 @@ alter table submissions enable row level security;
 -- submissions: anon은 "공개된 행"만 읽기 가능. 쓰기 정책 없음 = 서버 전용.
 create policy "submissions read revealed only" on submissions
   for select using (revealed = true);
+
+-- 컬럼 단위 차단: coaching/upgraded_question은 제출자 개인 피드백 —
+-- 행이 공개(revealed)되더라도 anon에게 노출하지 않는다.
+revoke select on submissions from anon, authenticated;
+grant select (id, nickname, question, level, level_name, revealed, created_at)
+  on submissions to anon, authenticated;
