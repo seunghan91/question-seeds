@@ -12,8 +12,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ code: string }> }
 ) {
-  // 5초 폴링 전제 → 기본(10/분)보다 넉넉히
-  const limit = rateLimit(`wall:${clientKey(req)}`, 30);
+  // 교실은 NAT 뒤 공유 IP — 50명 × 5초 폴링(12/분) = 600/분까지 정상 사용.
+  // LLM 호출 없는 저비용 조회라 캡을 교실 규모로 잡아도 비용 가드는 유지된다.
+  const limit = rateLimit(`wall:${clientKey(req)}`, 600);
   if (!limit.ok)
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
 

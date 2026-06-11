@@ -12,8 +12,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ code: string }> }
 ) {
-  // 공개 질문 여러 개를 연달아 평가하는 건 정상 사용 → 기본보다 넉넉히
-  const limit = rateLimit(`rate:${clientKey(req)}`, 20);
+  // 교실은 NAT 뒤 공유 IP — 수십 명이 공개 질문 여러 개를 연달아 평가하는 게
+  // 정상 사용. LLM 호출 없는 저비용 쓰기라 교실 규모(분당 300)로 캡.
+  const limit = rateLimit(`rate:${clientKey(req)}`, 300);
   if (!limit.ok)
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
 
