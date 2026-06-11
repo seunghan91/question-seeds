@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Evaluation } from "@/lib/rubric";
 
@@ -41,13 +41,22 @@ export default function ParticipantPage() {
   const [error, setError] = useState(false);
   const [wall, setWall] = useState<WallRow[]>([]);
   const [myIds, setMyIds] = useState<string[]>([]);
-  const voterKey = useRef("");
+  const [voterKey, setVoterKey] = useState("");
+  const [rateError, setRateError] = useState("");
 
   useEffect(() => {
-    voterKey.current = getVoterKey();
-    try {
-      setMyIds(JSON.parse(sessionStorage.getItem(`qs:mine:${code}`) ?? "[]"));
-    } catch {}
+    // post-mount 비동기 로드 (hydration·lint 안전)
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      setVoterKey(getVoterKey());
+      try {
+        setMyIds(JSON.parse(sessionStorage.getItem(`qs:mine:${code}`) ?? "[]"));
+      } catch {}
+    });
+    return () => {
+      active = false;
+    };
   }, [code]);
 
   useEffect(() => {
@@ -60,18 +69,21 @@ export default function ParticipantPage() {
   const refreshWall = useCallback(async () => {
     try {
       const res = await fetch(`/api/rooms/${code}/wall`, {
-        headers: voterKey.current ? { "x-voter-key": voterKey.current } : {},
+        headers: voterKey ? { "x-voter-key": voterKey } : {},
       });
       if (!res.ok) return;
       const d = await res.json();
       setWall(d.submissions ?? []);
     } catch {}
-  }, [code]);
+  }, [code, voterKey]);
 
   useEffect(() => {
-    refreshWall();
+    const first = setTimeout(refreshWall, 0);
     const t = setInterval(refreshWall, 5000);
-    return () => clearInterval(t);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
   }, [refreshWall]);
 
   async function submit() {
@@ -85,7 +97,7 @@ export default function ParticipantPage() {
         body: JSON.stringify({
           nickname,
           question: question.trim(),
-          voter_key: voterKey.current || undefined,
+          voter_key: voterKey || undefined,
         }),
       });
       if (!res.ok) throw new Error();
@@ -106,22 +118,42 @@ export default function ParticipantPage() {
   }
 
   async function rate(submissionId: string, stars: number) {
-    if (!voterKey.current) return;
-    // optimistic
+    if (!voterKey) return;
+    const prev = wall;
+    setRateError("");
+    // optimistic — 실패 시 원복
     setWall((w) =>
       w.map((r) => (r.id === submissionId ? { ...r, my_stars: stars } : r))
     );
     try {
-      await fetch(`/api/rooms/${code}/rate`, {
+      const res = await fetch(`/api/rooms/${code}/rate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           submission_id: submissionId,
           stars,
-          voter_key: voterKey.current,
+          voter_key: voterKey,
         }),
       });
-    } catch {}
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setWall(prev);
+        setRateError(
+          d.error === "cannot_rate_own"
+            ? "내 질문에는 별점을 줄 수 없어요."
+            : d.error === "rate_limited"
+              ? "잠시 후 다시 시도해 주세요."
+              : "별점 반영에 실패했어요. 다시 시도해 주세요."
+        );
+        setTimeout(() => setRateError(""), 3000);
+        return;
+      }
+    } catch {
+      setWall(prev);
+      setRateError("별점 반영에 실패했어요. 다시 시도해 주세요.");
+      setTimeout(() => setRateError(""), 3000);
+      return;
+    }
     refreshWall();
   }
 
@@ -215,11 +247,20 @@ export default function ParticipantPage() {
           </section>
         )}
 
-        {wall.length > 0 && (
-          <section className="mt-8">
-            <h2 className="text-sm font-bold text-[#5a6470]">
-              공개된 질문 · 별점으로 평가해 보세요
-            </h2>
+        <section className="mt-8">
+          <h2 className="text-sm font-bold text-[#5a6470]">
+            공개된 질문 · 별점으로 평가해 보세요
+          </h2>
+          {rateError && (
+            <p className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-600">
+              {rateError}
+            </p>
+          )}
+          {wall.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-dashed border-[#d8d4ca] p-5 text-center text-sm text-[#8a909a]">
+              발표자가 공개한 질문이 여기에 표시됩니다.
+            </p>
+          ) : (
             <ul className="mt-3 space-y-3">
               {wall.map((r) => {
                 const mine = myIds.includes(r.id);
@@ -235,7 +276,7 @@ export default function ParticipantPage() {
                         {r.level}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[15px] leading-snug">{r.question}</p>
+                        <p className="break-words text-[15px] leading-snug">{r.question}</p>
                         <p className="mt-1 text-xs text-[#8a909a]">
                           {r.nickname}
                           {mine && (
@@ -255,7 +296,7 @@ export default function ParticipantPage() {
                         {[1, 2, 3, 4, 5].map((s) => (
                           <button
                             key={s}
-                            disabled={mine || !voterKey.current}
+                            disabled={mine || !voterKey}
                             onClick={() => rate(r.id, s)}
                             aria-label={`별 ${s}개`}
                             className={`text-lg leading-none disabled:cursor-not-allowed ${
@@ -278,8 +319,8 @@ export default function ParticipantPage() {
                 );
               })}
             </ul>
-          </section>
-        )}
+          )}
+        </section>
 
         <footer className="mt-8 text-center text-[11px] text-[#9aa0a8]">
           익명으로 제출되며, 발표자가 공개한 질문만 모두에게 표시됩니다.

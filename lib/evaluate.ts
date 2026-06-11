@@ -25,7 +25,17 @@ function resolveProvider() {
 
 export async function evaluateQuestion(question: string): Promise<Evaluation> {
   const model = resolveProvider();
-  if (!model) return mockEvaluate(question);
+  if (!model) {
+    // 프로덕션에서 키 누락/만료로 조용히 mock이 나가면 "가짜 데모"처럼 보인다.
+    // mock은 명시적 LLM_PROVIDER=mock 또는 비프로덕션에서만 허용 (codex P0).
+    const explicitMock = process.env.LLM_PROVIDER === "mock";
+    const isProd =
+      (process.env.VERCEL_ENV ?? process.env.NODE_ENV) === "production";
+    if (isProd && !explicitMock) {
+      throw new Error("llm_not_configured"); // 라우트가 502로 변환
+    }
+    return mockEvaluate(question);
+  }
 
   const { object } = await generateObject({
     model,

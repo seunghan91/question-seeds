@@ -27,10 +27,17 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
-    // 첫 렌더 이후 로드 (hydration mismatch 방지)
-    try {
-      setHistory(JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]"));
-    } catch {}
+    // post-mount 비동기 로드 (hydration·lint 안전)
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      try {
+        setHistory(JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]"));
+      } catch {}
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function evaluate(q: string) {
@@ -106,6 +113,7 @@ export default function Home() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder={t.placeholder}
+            aria-label={t.placeholder}
             rows={3}
             maxLength={500}
             className="w-full resize-none rounded-2xl border border-[#d8d4ca] bg-white p-4 text-base leading-relaxed shadow-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"

@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 
 type Dict = {
   title: string;
@@ -74,7 +80,30 @@ const LocaleContext = createContext<{
 }>({ locale: "ko", t: dictionaries.ko, setLocale: () => {} });
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>("ko");
+  const [locale, setLocaleState] = useState<Locale>("ko");
+
+  // 선택한 언어를 새로고침 후에도 유지 (post-mount 비동기 로드 — hydration 안전)
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      try {
+        const saved = localStorage.getItem("qs:locale");
+        if (saved === "ko" || saved === "en") setLocaleState(saved);
+      } catch {}
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function setLocale(l: Locale) {
+    setLocaleState(l);
+    try {
+      localStorage.setItem("qs:locale", l);
+    } catch {}
+  }
+
   return (
     <LocaleContext.Provider
       value={{ locale, t: dictionaries[locale], setLocale }}

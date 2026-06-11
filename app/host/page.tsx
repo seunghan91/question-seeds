@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 
 type Row = {
@@ -14,15 +14,57 @@ type Row = {
   rating_count: number;
 };
 
+type Room = { code: string; host_key: string };
+
 const BAR = ["", "bg-stone-400", "bg-sky-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500"];
+
+// 새로고침/탭 복원에도 룸 컨트롤을 유지한다 (codex P0 — 데모 중 룸 유실 방지).
+const HOST_KEY = "qs:host";
 
 export default function HostPage() {
   const [title, setTitle] = useState("");
-  const [room, setRoom] = useState<{ code: string; host_key: string } | null>(null);
+  const [room, setRoom] = useState<Room | null>(null);
+  const [restoring, setRestoring] = useState(true);
   const [qr, setQr] = useState("");
+  const [joinUrl, setJoinUrl] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState("");
-  const joinUrl = useRef("");
+  const [connLost, setConnLost] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // 저장된 룸 복원 (post-mount, 비동기 — hydration·lint 안전)
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      try {
+        const saved = JSON.parse(localStorage.getItem(HOST_KEY) ?? "null");
+        if (saved?.code && saved?.host_key) {
+          setRoom({ code: saved.code, host_key: saved.host_key });
+          setTitle(saved.title ?? "");
+        }
+      } catch {}
+      setRestoring(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // 룸이 정해지면 입장 URL + QR 생성 (해제는 newRoom 이벤트 핸들러에서)
+  useEffect(() => {
+    if (!room) return;
+    let active = true;
+    const url = `${location.origin}/r/${room.code}`;
+    QRCode.toDataURL(url, { width: 360, margin: 1 }).then((dataUrl) => {
+      if (!active) return;
+      setJoinUrl(url);
+      setQr(dataUrl);
+    });
+    return () => {
+      active = false;
+    };
+  }, [room]);
 
   async function createRoom() {
     setError("");
@@ -36,43 +78,107 @@ export default function HostPage() {
       return;
     }
     const data = await res.json();
-    joinUrl.current = `${location.origin}/r/${data.code}`;
-    setQr(await QRCode.toDataURL(joinUrl.current, { width: 360, margin: 1 }));
+    try {
+      localStorage.setItem(
+        HOST_KEY,
+        JSON.stringify({ code: data.code, host_key: data.host_key, title })
+      );
+    } catch {}
     setRoom(data);
+  }
+
+  function newRoom() {
+    try {
+      localStorage.removeItem(HOST_KEY);
+    } catch {}
+    setRoom(null);
+    setRows([]);
+    setTitle("");
+    setQr("");
+    setJoinUrl("");
   }
 
   const refresh = useCallback(async () => {
     if (!room) return;
-    const res = await fetch(`/api/rooms/${room.code}/board`, {
-      headers: { "x-host-key": room.host_key },
-    });
-    if (res.ok) setRows((await res.json()).submissions);
+    try {
+      const res = await fetch(`/api/rooms/${room.code}/board`, {
+        headers: { "x-host-key": room.host_key },
+      });
+      if (res.status === 403 || res.status === 404) {
+        // 저장된 룸이 더 이상 유효하지 않음 (삭제/잘못된 키) → 초기 화면으로
+        newRoom();
+        return;
+      }
+      if (!res.ok) throw new Error();
+      setRows((await res.json()).submissions);
+      setConnLost(false);
+    } catch {
+      setConnLost(true);
+    }
   }, [room]);
 
   useEffect(() => {
     if (!room) return;
-    refresh();
+    const first = setTimeout(refresh, 0);
     const id = setInterval(refresh, 3000);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
   }, [room, refresh]);
 
   async function toggleReveal(row: Row) {
     if (!room) return;
-    await fetch(`/api/rooms/${room.code}/board`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        host_key: room.host_key,
-        submission_id: row.id,
-        revealed: !row.revealed,
-      }),
-    });
+    try {
+      const res = await fetch(`/api/rooms/${room.code}/board`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          host_key: room.host_key,
+          submission_id: row.id,
+          revealed: !row.revealed,
+        }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setError("공개 전환에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      setTimeout(() => setError(""), 3000);
+    }
     refresh();
+  }
+
+  async function downloadCsv() {
+    if (!room) return;
+    try {
+      const res = await fetch(`/api/rooms/${room.code}/board?format=csv`, {
+        headers: { "x-host-key": room.host_key },
+      });
+      if (!res.ok) throw new Error();
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `questions-${room.code}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("CSV 내보내기에 실패했어요. 잠시 후 다시 시도해 주세요.");
+      setTimeout(() => setError(""), 3000);
+    }
+  }
+
+  async function copyJoinUrl() {
+    try {
+      await navigator.clipboard.writeText(joinUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {}
   }
 
   const counts = [0, 0, 0, 0, 0, 0];
   rows.forEach((r) => counts[r.level]++);
   const max = Math.max(1, ...counts.slice(1));
+
+  if (restoring) return <main className="flex-1" />;
 
   if (!room)
     return (
@@ -86,6 +192,7 @@ export default function HostPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="세션 제목 (예: AI 시대의 질문법 워크숍)"
+            aria-label="세션 제목"
             className="mt-5 w-full rounded-xl border border-[#d8d4ca] bg-white p-3 text-sm outline-none focus:border-emerald-500"
           />
           <button
@@ -111,40 +218,51 @@ export default function HostPage() {
           <p className="mt-3 font-mono text-3xl font-extrabold tracking-[0.3em]">
             {room.code}
           </p>
-          <p className="mt-1 text-xs text-[#8a909a]">{joinUrl.current}</p>
+          <p className="mt-1 break-all text-xs text-[#8a909a]">{joinUrl}</p>
+          <div className="mt-4 flex justify-center gap-2">
+            <button
+              onClick={copyJoinUrl}
+              className="rounded-xl border border-[#d8d4ca] px-4 py-2 text-sm font-semibold text-[#5a6470] hover:bg-white"
+            >
+              {copied ? "복사됨 ✓" : "링크 복사"}
+            </button>
+            <button
+              onClick={downloadCsv}
+              className="rounded-xl border border-[#d8d4ca] px-4 py-2 text-sm font-semibold text-[#5a6470] hover:bg-white"
+            >
+              CSV 내보내기
+            </button>
+          </div>
           <button
-            onClick={async () => {
-              const res = await fetch(`/api/rooms/${room.code}/board?format=csv`, {
-                headers: { "x-host-key": room.host_key },
-              });
-              if (!res.ok) return;
-              const url = URL.createObjectURL(await res.blob());
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `questions-${room.code}.csv`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="mt-4 inline-block rounded-xl border border-[#d8d4ca] px-4 py-2 text-sm font-semibold text-[#5a6470] hover:bg-white"
+            onClick={newRoom}
+            className="mt-3 text-xs text-[#9aa0a8] underline-offset-2 hover:underline"
           >
-            CSV 내보내기
+            새 룸 만들기
           </button>
         </aside>
 
         <section>
+          {connLost && (
+            <p className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-700">
+              연결이 끊겼어요 — 자동으로 다시 시도하는 중입니다.
+            </p>
+          )}
+          {error && (
+            <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">{error}</p>
+          )}
           <div className="rounded-2xl border border-[#e3dfd5] bg-white p-5">
             <h2 className="text-sm font-bold text-[#5a6470]">
               레벨 분포 · 총 {rows.length}개
             </h2>
-            <div className="mt-3 flex items-end gap-3" style={{ height: 120 }}>
+            <div className="mt-3 flex items-end gap-3" aria-hidden>
               {[1, 2, 3, 4, 5].map((lv) => (
-                <div key={lv} className="flex flex-1 flex-col items-center justify-end h-full">
-                  <span className="text-xs font-bold">{counts[lv]}</span>
+                <div key={lv} className="flex flex-1 flex-col items-center gap-1">
+                  <span className="text-xs font-bold text-[#5a6470]">{counts[lv]}</span>
                   <div
-                    className={`w-full rounded-t-lg ${BAR[lv]} transition-all`}
-                    style={{ height: `${(counts[lv] / max) * 90}%` }}
+                    className={`w-full rounded-t-md ${BAR[lv]} transition-all`}
+                    style={{ height: `${(counts[lv] / max) * 96 + 4}px` }}
                   />
-                  <span className="mt-1 text-xs text-[#8a909a]">L{lv}</span>
+                  <span className="text-[11px] font-semibold text-[#8a909a]">L{lv}</span>
                 </div>
               ))}
             </div>
@@ -164,7 +282,7 @@ export default function HostPage() {
                   {r.level}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{r.question}</p>
+                  <p className="break-words font-medium">{r.question}</p>
                   <p className="text-xs text-[#8a909a]">
                     {r.nickname}
                     {r.rating_count > 0 && (

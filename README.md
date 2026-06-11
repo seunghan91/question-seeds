@@ -5,13 +5,17 @@
 > An unofficial demo **inspired by [Stanford SMILE](https://newsmile.seedsofempowerment.org)** — not affiliated with Seeds of Empowerment.
 > 목적: Ask SMILE의 한국어 현지화(피드백·코칭의 한국어화)가 어떤 경험이어야 하는지 작동물로 보여주는 것. 코드·프롬프트·평가셋은 SoE 측이 원하면 기증을 전제로 공개합니다.
 
+**Live: <https://question-seeds.vercel.app>**
+
 ## 구성
 
 | 모드 | 경로 | 상태 |
 |---|---|---|
-| 솔로 질문 코칭 | `/` | ✅ 작동 (mock/anthropic/openai) |
-| EN vs KO 비교 | `/compare` | 🚧 Phase 4 |
-| 워크숍 라이브 (QR 입장 + 실시간 보드) | `/host`, `/r/[code]` | 🚧 Phase 3 — `supabase/schema.sql` 준비됨 |
+| 솔로 질문 코칭 + 성장 히스토리 | `/` | ✅ 작동 (mock/anthropic/openai) |
+| EN vs KO 비교 (피치 증거) | `/compare` | ✅ 작동 |
+| 워크숍 라이브 (QR 입장 + 보드 + 피어 별점 + CSV) | `/host`, `/r/[code]` | ✅ 작동 — `supabase/schema.sql` 적용 필요 |
+
+벤치마크: 한국어 50문항, GPT(gpt-4o-mini) exact **92%** / ±1 **96%** (mock 베이스라인 74%).
 
 ## 실행
 
