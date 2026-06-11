@@ -10,6 +10,8 @@ type Row = {
   level: number;
   level_name: string;
   revealed: boolean;
+  avg_stars: number | null;
+  rating_count: number;
 };
 
 const BAR = ["", "bg-stone-400", "bg-sky-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500"];
@@ -163,7 +165,14 @@ export default function HostPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{r.question}</p>
-                  <p className="text-xs text-[#8a909a]">{r.nickname}</p>
+                  <p className="text-xs text-[#8a909a]">
+                    {r.nickname}
+                    {r.rating_count > 0 && (
+                      <span className="ml-2 font-semibold text-amber-600">
+                        ★ {r.avg_stars} ({r.rating_count})
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <button
                   onClick={() => toggleReveal(r)}

@@ -1,10 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Evaluation } from "@/lib/rubric";
 
 const BAR = ["", "bg-stone-400", "bg-sky-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500"];
+
+type WallRow = {
+  id: string;
+  nickname: string;
+  question: string;
+  level: number;
+  level_name: string;
+  avg_stars: number | null;
+  rating_count: number;
+  my_stars: number | null;
+};
+
+function getVoterKey(): string {
+  try {
+    let key = localStorage.getItem("qs:voter");
+    if (!key) {
+      key = crypto.randomUUID();
+      localStorage.setItem("qs:voter", key);
+    }
+    return key;
+  } catch {
+    return ""; // private mode 등 — 평가 기능만 비활성화되고 나머지는 동작
+  }
+}
 
 export default function ParticipantPage() {
   const { code } = useParams<{ code: string }>();
@@ -15,6 +39,16 @@ export default function ParticipantPage() {
   const [result, setResult] = useState<Evaluation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [wall, setWall] = useState<WallRow[]>([]);
+  const [myIds, setMyIds] = useState<string[]>([]);
+  const voterKey = useRef("");
+
+  useEffect(() => {
+    voterKey.current = getVoterKey();
+    try {
+      setMyIds(JSON.parse(sessionStorage.getItem(`qs:mine:${code}`) ?? "[]"));
+    } catch {}
+  }, [code]);
 
   useEffect(() => {
     fetch(`/api/rooms/${code}/submit`)
@@ -22,6 +56,23 @@ export default function ParticipantPage() {
       .then((d) => setRoomTitle(d.title || "질문 워크숍"))
       .catch(() => setNotFound(true));
   }, [code]);
+
+  const refreshWall = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/rooms/${code}/wall`, {
+        headers: voterKey.current ? { "x-voter-key": voterKey.current } : {},
+      });
+      if (!res.ok) return;
+      const d = await res.json();
+      setWall(d.submissions ?? []);
+    } catch {}
+  }, [code]);
+
+  useEffect(() => {
+    refreshWall();
+    const t = setInterval(refreshWall, 5000);
+    return () => clearInterval(t);
+  }, [refreshWall]);
 
   async function submit() {
     if (!question.trim() || loading) return;
@@ -31,15 +82,47 @@ export default function ParticipantPage() {
       const res = await fetch(`/api/rooms/${code}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname, question: question.trim() }),
+        body: JSON.stringify({
+          nickname,
+          question: question.trim(),
+          voter_key: voterKey.current || undefined,
+        }),
       });
       if (!res.ok) throw new Error();
-      setResult(await res.json());
+      const ev = (await res.json()) as Evaluation & { id?: string };
+      setResult(ev);
+      if (ev.id) {
+        const next = [...myIds, ev.id];
+        setMyIds(next);
+        try {
+          sessionStorage.setItem(`qs:mine:${code}`, JSON.stringify(next));
+        } catch {}
+      }
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function rate(submissionId: string, stars: number) {
+    if (!voterKey.current) return;
+    // optimistic
+    setWall((w) =>
+      w.map((r) => (r.id === submissionId ? { ...r, my_stars: stars } : r))
+    );
+    try {
+      await fetch(`/api/rooms/${code}/rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submission_id: submissionId,
+          stars,
+          voter_key: voterKey.current,
+        }),
+      });
+    } catch {}
+    refreshWall();
   }
 
   if (notFound)
@@ -132,8 +215,74 @@ export default function ParticipantPage() {
           </section>
         )}
 
+        {wall.length > 0 && (
+          <section className="mt-8">
+            <h2 className="text-sm font-bold text-[#5a6470]">
+              공개된 질문 · 별점으로 평가해 보세요
+            </h2>
+            <ul className="mt-3 space-y-3">
+              {wall.map((r) => {
+                const mine = myIds.includes(r.id);
+                return (
+                  <li
+                    key={r.id}
+                    className="rounded-xl border border-[#e3dfd5] bg-white p-4"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span
+                        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold text-white ${BAR[r.level]}`}
+                      >
+                        {r.level}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] leading-snug">{r.question}</p>
+                        <p className="mt-1 text-xs text-[#8a909a]">
+                          {r.nickname}
+                          {mine && (
+                            <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                              내 질문
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <div
+                        className="flex gap-0.5"
+                        role="radiogroup"
+                        aria-label="질문 별점"
+                      >
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <button
+                            key={s}
+                            disabled={mine || !voterKey.current}
+                            onClick={() => rate(r.id, s)}
+                            aria-label={`별 ${s}개`}
+                            className={`text-lg leading-none disabled:cursor-not-allowed ${
+                              (r.my_stars ?? 0) >= s
+                                ? "text-amber-400"
+                                : "text-stone-300"
+                            } ${mine ? "opacity-40" : "hover:text-amber-300"}`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-[#8a909a]">
+                        {r.avg_stars != null
+                          ? `★ ${r.avg_stars} (${r.rating_count})`
+                          : "아직 평가 없음"}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         <footer className="mt-8 text-center text-[11px] text-[#9aa0a8]">
-          익명으로 제출되며, 발표자가 공개한 질문만 화면에 표시됩니다.
+          익명으로 제출되며, 발표자가 공개한 질문만 모두에게 표시됩니다.
         </footer>
       </div>
     </main>
