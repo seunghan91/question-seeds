@@ -20,7 +20,8 @@ export async function GET(
   { params }: { params: Promise<{ code: string }> }
 ) {
   const { code } = await params;
-  const hostKey = req.nextUrl.searchParams.get("host_key");
+  // host_key는 URL이 아닌 헤더로만 받는다 (로그·히스토리 유출 방지)
+  const hostKey = req.headers.get("x-host-key");
   const { db, room } = await authRoom(code, hostKey);
   if (!db)
     return NextResponse.json({ error: "supabase_not_configured" }, { status: 503 });
@@ -33,7 +34,12 @@ export async function GET(
     .order("created_at", { ascending: true });
 
   if (req.nextUrl.searchParams.get("format") === "csv") {
-    const esc = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
+    // 셀 앞에 ' 를 붙여 스프레드시트 수식 주입(=,+,-,@) 차단
+    const esc = (s: string) => {
+      let v = String(s);
+      if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+      return `"${v.replace(/"/g, '""')}"`;
+    };
     const csv = [
       "created_at,nickname,level,question",
       ...(rows ?? []).map((r) =>

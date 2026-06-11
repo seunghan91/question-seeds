@@ -41,9 +41,9 @@ export default function HostPage() {
 
   const refresh = useCallback(async () => {
     if (!room) return;
-    const res = await fetch(
-      `/api/rooms/${room.code}/board?host_key=${room.host_key}`
-    );
+    const res = await fetch(`/api/rooms/${room.code}/board`, {
+      headers: { "x-host-key": room.host_key },
+    });
     if (res.ok) setRows((await res.json()).submissions);
   }, [room]);
 
@@ -110,12 +110,23 @@ export default function HostPage() {
             {room.code}
           </p>
           <p className="mt-1 text-xs text-[#8a909a]">{joinUrl.current}</p>
-          <a
-            href={`/api/rooms/${room.code}/board?host_key=${room.host_key}&format=csv`}
+          <button
+            onClick={async () => {
+              const res = await fetch(`/api/rooms/${room.code}/board?format=csv`, {
+                headers: { "x-host-key": room.host_key },
+              });
+              if (!res.ok) return;
+              const url = URL.createObjectURL(await res.blob());
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `questions-${room.code}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
             className="mt-4 inline-block rounded-xl border border-[#d8d4ca] px-4 py-2 text-sm font-semibold text-[#5a6470] hover:bg-white"
           >
             CSV 내보내기
-          </a>
+          </button>
         </aside>
 
         <section>
