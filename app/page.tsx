@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocale } from "@/lib/i18n";
 import type { Evaluation } from "@/lib/rubric";
 
@@ -13,12 +13,25 @@ const LEVEL_COLORS = [
   "bg-amber-500",
 ];
 
+// 성장 히스토리: Ask.SMILE은 단발 평가만 제공 — 반복 도전의 레벨 변화를 보여주는
+// 차별화 기능. localStorage 전용(계정 없음), 최근 20개.
+const HISTORY_KEY = "qs:history:v1";
+type HistoryItem = { q: string; level: number; ts: number };
+
 export default function Home() {
   const { locale, t, setLocale } = useLocale();
   const [question, setQuestion] = useState("");
   const [result, setResult] = useState<Evaluation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
+  useEffect(() => {
+    // 첫 렌더 이후 로드 (hydration mismatch 방지)
+    try {
+      setHistory(JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]"));
+    } catch {}
+  }, []);
 
   async function evaluate(q: string) {
     const trimmed = q.trim();
@@ -33,12 +46,28 @@ export default function Home() {
         body: JSON.stringify({ question: trimmed }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setResult((await res.json()) as Evaluation);
+      const ev = (await res.json()) as Evaluation;
+      setResult(ev);
+      const next = [
+        ...history,
+        { q: trimmed.slice(0, 80), level: ev.level, ts: Date.now() },
+      ].slice(-20);
+      setHistory(next);
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+      } catch {}
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
+  }
+
+  function clearHistory() {
+    setHistory([]);
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+    } catch {}
   }
 
   return (
@@ -164,6 +193,44 @@ export default function Home() {
                 {t.tryAgain}
               </button>
             </div>
+          </section>
+        )}
+
+        {history.length > 0 && (
+          <section className="mt-8">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-sm font-bold text-[#5a6470]">
+                {t.historyTitle}
+              </h2>
+              <button
+                onClick={clearHistory}
+                className="text-xs text-[#9aa0a8] underline-offset-2 hover:underline"
+              >
+                {t.historyClear}
+              </button>
+            </div>
+            <ol className="mt-3 flex flex-wrap items-end gap-1.5">
+              {history.map((h, i) => {
+                const delta = i > 0 ? h.level - history[i - 1].level : 0;
+                return (
+                  <li key={h.ts} className="flex flex-col items-center">
+                    {delta > 0 ? (
+                      <span className="text-[10px] font-bold leading-none text-emerald-600">
+                        ▲{delta}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] leading-none">&nbsp;</span>
+                    )}
+                    <span
+                      title={h.q}
+                      className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold text-white ${LEVEL_COLORS[h.level]}`}
+                    >
+                      {h.level}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
           </section>
         )}
       </div>

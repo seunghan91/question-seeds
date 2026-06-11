@@ -17,6 +17,8 @@ type Dict = {
   tryUpgraded: string;
   error: string;
   footer: string;
+  historyTitle: string;
+  historyClear: string;
 };
 
 const dictionaries: Record<"ko" | "en", Dict> = {
@@ -37,6 +39,8 @@ const dictionaries: Record<"ko" | "en", Dict> = {
     error: "평가에 실패했어요. 잠시 후 다시 시도해 주세요.",
     footer:
       "Stanford SMILE에서 영감을 받은 비공식 데모입니다 · Seeds of Empowerment와 무관합니다",
+    historyTitle: "나의 질문 성장 기록",
+    historyClear: "기록 지우기",
   },
   en: {
     title: "Question Seeds",
@@ -55,6 +59,8 @@ const dictionaries: Record<"ko" | "en", Dict> = {
     error: "Evaluation failed. Please try again in a moment.",
     footer:
       "An unofficial demo inspired by Stanford SMILE · Not affiliated with Seeds of Empowerment",
+    historyTitle: "Your growth so far",
+    historyClear: "Clear",
   },
 };
 
