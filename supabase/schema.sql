@@ -32,8 +32,9 @@ create table if not exists submissions (
 
 create index if not exists submissions_room_idx on submissions (room_id, created_at);
 
--- Realtime 발행 (공개된 제출물의 실시간 갱신 — RLS가 함께 적용됨)
-alter publication supabase_realtime add table submissions;
+-- Realtime 발행 안 함 (codex review 반영): WAL 페이로드는 컬럼 단위 grant를
+-- 우회해 전체 행(coaching 포함)을 노출할 수 있다. 현재 UI는 3초 폴링만 사용.
+-- Realtime이 필요해지면 sanitized view 전용 publication으로 추가할 것.
 
 alter table rooms enable row level security;
 alter table submissions enable row level security;

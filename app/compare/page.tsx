@@ -37,8 +37,8 @@ export default function ComparePage() {
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#444c55]">
           We asked the exact same Korean question — {QUESTION_EN} — to Ask SMILE
-          and to this demo (질문씨앗, &ldquo;Question Seeds&rdquo;). Both run on
-          GPT. The only difference is a Korean-native rubric prompt and
+          and to this demo (질문씨앗, &ldquo;Question Seeds&rdquo;). Both use a
+          GPT-family model; this demo adds a Korean-native rubric prompt and
           few-shot examples.
         </p>
 

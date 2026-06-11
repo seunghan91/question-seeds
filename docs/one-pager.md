@@ -15,7 +15,7 @@ Ask SMILE evaluates questions against a Bloom-aligned Level 1–5 rubric — but
 **질문씨앗 (Question Seeds)** — a Korean-native localization prototype of the Ask SMILE coaching loop, built as a volunteer contribution and intended for donation to Seeds of Empowerment.
 
 1. **Korean rubric prompt** — the Level 1–5 rubric and few-shot examples adapted into Korean from Kim, Wang & Bonk (2025), producing structured output: level, rationale, coaching, and an upgraded question — all in the learner's language.
-2. **Solo coaching** (`/`) — a learner submits a question and receives level + coaching + a one-level-deeper version of their own question, streamed in Korean.
+2. **Solo coaching** (`/`) — a learner submits a question and receives level + coaching + a one-level-deeper version of their own question, all in Korean.
 3. **Workshop live mode** (`/host`, `/r/CODE`) — a facilitator creates a QR room; participants submit questions from their phones and get private coaching; the facilitator sees a live level histogram and can selectively reveal questions to the room, then export CSV. Designed for classrooms and teacher training.
 4. **Korean benchmark** — a 50-question evalset labeled on the same rubric (25 items translated from the paper's examples, 25 new Korean items spanning school and everyday/workplace contexts).
 
